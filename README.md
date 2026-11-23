@@ -41,6 +41,7 @@ mac 和 Windows 共用一个 Release，两边产物都要上传，否则另一�
 1. 把 `win/package.json` 的 `version` 和 `mac/Info.plist` 的 `CFBundleShortVersionString` 改成同一个版本，`CFBundleVersion` 加 1，合入 main。
 2. 执行 `sh mac/package.sh`，推送 `vX.Y.Z` tag，再执行 `gh release create vX.Y.Z --generate-notes dist/KeyCat-macOS.zip dist/KeyCat-macOS.zip.sha256 dist/latest-mac.json`。`latest-mac.json` 是 mac 版的更新清单，mac 版靠 `CFBundleVersion` 判断新旧，所以每次发布都要加 1。
 3. tag 触发 GitHub Actions，几分钟后会把 Windows 安装包、`latest.json`（新版的更新清单）和 `latest.yml`（让 1.0.x 旧版升级过来）补传到同一个 Release。
+4. 同一个 Actions 最后会把整个 Release（标题、说明、全部附件）复制到 Gitee 镜像 [banunu/KeyCat](https://gitee.com/banunu/KeyCat/releases)，需要仓库的 `GITEE_TOKEN` Secret。Gitee 的仓库镜像只同步代码和 tag，不同步 Release；Gitee 会拒收未签名的 exe，所以 Windows 安装包在那边是 `KeyCat-Windows-Setup.zip`。第 2 步要在 Actions 跑完前做完，否则 mac 包赶不上，这时手动执行 `sh tools/gitee-release.sh vX.Y.Z` 补传（token 放在 `signing/gitee-token`）。
 
 ## 目录
 

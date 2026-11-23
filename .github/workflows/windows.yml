@@ -2,7 +2,7 @@ name: Windows
 
 # Builds the Tauri shell in win/ on a real Windows runner. Tag pushes also publish the installer
 # plus latest.json, which is what the app's updater reads, and latest.yml, which moves 1.0.x
-# installs (Electron, electron-updater) over to this build.
+# installs (Electron, electron-updater) over to this build, then copy the whole release to Gitee.
 on:
   push:
     branches: [main]
@@ -107,6 +107,20 @@ jobs:
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
           gh release upload "$GITHUB_REF_NAME" out/KeyCat-Windows-Setup.exe out/latest.json out/latest.yml --clobber
+
+      # Copies the finished release to the Gitee mirror (gitee.com/banunu/KeyCat), which only syncs code.
+      # Skipped when the GITEE_TOKEN secret is not set.
+      - name: Copy release to Gitee
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          if [ -z "$GITEE_TOKEN" ]; then
+            echo "GITEE_TOKEN is not set; skipping"
+            exit 0
+          fi
+          sh ../tools/gitee-release.sh "$GITHUB_REF_NAME"
 
       - uses: actions/upload-artifact@v4
         with:
