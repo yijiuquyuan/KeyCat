@@ -3,6 +3,7 @@
 //! whiskers, collar, privacy, clickThrough, sleepAfter, tune, originX, originY. runAsAdmin is
 //! Windows-only.
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 
 use serde_json::{Map, Value};
@@ -35,12 +36,19 @@ impl Store {
         self.save();
     }
 
+    /// Writes a temporary file next to the real one and renames it over, so a crash or power cut
+    /// mid-write leaves the old settings instead of a truncated file that loads as empty.
     fn save(&self) {
         let write = || -> std::io::Result<()> {
             if let Some(dir) = self.file.parent() {
                 fs::create_dir_all(dir)?;
             }
-            fs::write(&self.file, serde_json::to_string_pretty(&self.data)?)
+            let temp = self.file.with_extension("json.tmp");
+            let mut file = fs::File::create(&temp)?;
+            file.write_all(serde_json::to_string_pretty(&self.data)?.as_bytes())?;
+            file.sync_all()?;
+            drop(file);
+            fs::rename(&temp, &self.file)
         };
         if let Err(error) = write() {
             eprintln!("settings save failed: {error}");

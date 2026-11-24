@@ -124,8 +124,11 @@
   // (towards the viewer, the way the cat holds it), palm hump at the back under the cat's paw,
   // a dark sticker outline, and a cable trailing off to the side.
   const mouse = new THREE.Group();
-  const MOUSE_HOME = V(-1.16, 0.02, 0.96);
+  const MOUSE_HOME = V(-1.2, 0.02, 0.96);
   mouse.position.copy(MOUSE_HOME);
+  // How far the mouse may slide right before its outline (0.19 from its centre, click squash
+  // included) would touch the keyboard's cream edge.
+  const MOUSE_ROOM = board.position.x - (W + 0.05) / 2 - 0.19 - MOUSE_HOME.x;
   const shape = new THREE.Group();
   shape.rotation.y = -0.18;
   mouse.add(shape);
@@ -189,6 +192,8 @@
     update(dt, down) {
       this.kick.multiplyScalar(1 - K.approach(3, dt));
       this.offset.copy(this.follow.step(this.kick, dt));
+      // Rightward travel eases off as it nears the keyboard instead of running into it.
+      if (this.offset.x > 0) this.offset.x = MOUSE_ROOM * Math.tanh(this.offset.x / MOUSE_ROOM);
       mouse.position.copy(MOUSE_HOME).add(this.offset);
       this.pressed += ((down ? 1 : 0) - this.pressed) * K.approach(30, dt);
       buttonMat.opacity = 0.9 * this.pressed;

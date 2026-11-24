@@ -388,8 +388,7 @@
     P.ears.step(0.1 * S.excite * (1 - cross) + 0.12 * curious - 0.22 * S.rub - 0.55 * cross, dt);
     for (const e of cat.ears) {
       const flick = act && act.kind === 'ear' && e.s === act.side ? Math.sin(actU * Math.PI * 3) * 0.3 * (1 - actU) : 0;
-      e.group.rotation.z = -e.s * (e.tilt - P.ears.x) + flick;
-      e.group.rotation.x = -0.12 - 0.35 * cross + 0.12 * curious;
+      cat.turnEar(e, -e.s * (e.tilt - P.ears.x) + flick, -0.12 - 0.35 * cross + 0.12 * curious);
     }
 
     // Eyes: pupils lead; blink, slow-blink when relaxed, squint when petted, close when asleep.
@@ -415,8 +414,14 @@
         py = clamp((focus.y - es.y) / 170, -1, 1);
       }
       // Width grows with `dilate`; very wide, the slit's height shrinks a touch so it reads round.
-      e.pupil.scale.x += (0.044 * dilate - e.pupil.scale.x) * approach(10, dt);
-      e.pupil.scale.y += (0.11 - 0.012 * Math.max(0, dilate - 1.5) - e.pupil.scale.y) * approach(10, dt);
+      // A round-eyed breed keeps a round pupil at every size, capped so the iris ring stays visible,
+      // and only narrows again under the heavy lids of a cross cat.
+      const round = K.eyeRound || 0;
+      const disc = Math.min(0.1, 0.045 + 0.024 * dilate) * (1 - 0.25 * cross);
+      const pw = mix(0.044 * dilate, disc, round);
+      const ph = mix(0.11 - 0.012 * Math.max(0, dilate - 1.5), disc, round);
+      e.pupil.scale.x += (pw - e.pupil.scale.x) * approach(10, dt);
+      e.pupil.scale.y += (ph - e.pupil.scale.y) * approach(10, dt);
       // A slight inward, downward resting gaze gives the reference's soft cross-eyed look. The
       // pupil may only travel as far as keeps it inside the iris, so a wide one sits near the
       // centre; the limit applies to where it is now, not only where it is heading.

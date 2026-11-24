@@ -90,6 +90,10 @@ struct Host {
     autostart: Mode,
     update: UpdateState,
     downloaded: Option<(Update, Vec<u8>)>,
+    /// The page has sent a message, so its script is running.
+    page_answered: bool,
+    /// The cat window could not be made, or its page never answered (see watch_page).
+    page_failed: bool,
 }
 
 /// Settings with their defaults applied, the same keys and fallbacks as the mac build.
@@ -98,6 +102,8 @@ struct Settings {
     coat: String,
     pattern: String,
     eye: String,
+    /// "auto" follows the coat (the cobby breeds read round-eyed); "almond" forces the slit pupil.
+    eye_shape: String,
     shine: String,
     collar: String,
     blush: bool,
@@ -125,6 +131,7 @@ impl Host {
             style: text("style", "2d"),
             pattern: text(&format!("pattern.{coat}"), "auto"),
             eye: text("eyeColor", "auto"),
+            eye_shape: text("eyeShape", "auto"),
             shine: text("eyeShine", "classic"),
             collar: text("collar", "none"),
             blush: self.store.get("blush") == Some(&Value::Bool(true)),
@@ -177,7 +184,12 @@ fn log(text: &str) {
     // Logging must never take the app down.
     let dir = data_dir();
     let _ = fs::create_dir_all(&dir);
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dir.join("log.txt")) {
+    let path = dir.join("log.txt");
+    // Past 1 MB the log moves to log.old.txt, replacing the one before, so the two stay small.
+    if fs::metadata(&path).is_ok_and(|meta| meta.len() > 1 << 20) {
+        let _ = fs::rename(&path, dir.join("log.old.txt"));
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
         let _ = writeln!(file, "{} {text}", timestamp());
     }
 }
@@ -200,6 +212,7 @@ fn push_options(app: &AppHandle) {
         "coat": s.coat,
         "pattern": s.pattern,
         "eye": s.eye,
+        "eyeShape": s.eye_shape,
         "shine": s.shine,
         "blush": s.blush,
         "whiskers": s.whiskers,
@@ -309,7 +322,29 @@ fn create_panel(app: &AppHandle) -> tauri::Result<()> {
     panel.set_ignore_cursor_events(true)?;
     panel.show()?;
     log("panel created");
+    watch_page(app);
     Ok(())
+}
+
+/// WebView2 can fail without an error reaching us: the window stays blank and the page never
+/// loads or never runs. A page that has not sent a single message 30 s after its window was
+/// made (it answers the frame count every 15 s, see start_status_reports) goes in the log, and
+/// the menu says so until it answers.
+fn watch_page(app: &AppHandle) {
+    let app = app.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_secs(30));
+        let page_ready = {
+            let mut h = host(&app);
+            if h.page_answered {
+                return;
+            }
+            h.page_failed = true;
+            h.page_ready
+        };
+        log(&format!("page has not answered 30 s after start (load finished: {page_ready})"));
+        refresh_menu(&app);
+    });
 }
 
 // MARK: Frame loop
@@ -562,6 +597,15 @@ fn host_message(app: AppHandle, webview: Webview, channel: String, message: Valu
 }
 
 fn on_cat_message(app: &AppHandle, message: &Value) {
+    let recovered = {
+        let mut h = host(app);
+        h.page_answered = true;
+        std::mem::take(&mut h.page_failed)
+    };
+    if recovered {
+        log("page answered");
+        refresh_menu(app);
+    }
     if let Some(hit) = message.get("hit").and_then(Value::as_str) {
         host(app).hit = hit.to_string();
         update_click_target(app);
@@ -650,9 +694,9 @@ fn update_item(app: &AppHandle) -> tauri::Result<Item> {
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
-    let (s, hook_ready, autostart) = {
+    let (s, hook_ready, autostart, page_failed) = {
         let h = host(app);
-        (h.settings(), h.hook_ready, h.autostart)
+        (h.settings(), h.hook_ready, h.autostart, h.page_failed)
     };
     let coat = s.coat.as_str();
     let mut items = vec![check(app, format!("set:style={}", json!(if s.style == "3d" { "2d" } else { "3d" })), "立体效果（3D）", s.style == "3d")?];
@@ -671,6 +715,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             ("德文卷毛猫", json!("devon")),
             ("美短银虎斑", json!("silver")),
             ("狸花猫", json!("lihua")),
+            ("金渐层", json!("golden")),
         ])?,
     )?);
     // Only coats whose stripes would show get the choice; black and white stay plain.
@@ -700,14 +745,21 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         ("粉色铃铛", json!("pink")),
         ("绿色铃铛", json!("green")),
     ])?;
+    let eye_shape = choice(app, "eyeShape", &json!(s.eye_shape), &[
+        ("跟随毛色", json!("auto")),
+        ("杏仁眼（竖瞳）", json!("almond")),
+        ("圆眼（圆瞳）", json!("round")),
+    ])?;
     items.push(submenu(app, "外观", vec![
         submenu(app, "眼睛颜色", eyes)?,
+        submenu(app, "眼睛款式", eye_shape)?,
         submenu(app, "眼睛高光", shine)?,
         submenu(app, "项圈", collar)?,
         toggle(app, "腮红", "blush", s.blush)?,
         toggle(app, "胡须", "whiskers", s.whiskers)?,
     ])?);
-    let sizes = [("特小", 0.5), ("小", 0.7), ("中", 0.9), ("大", 1.1), ("特大", 1.35)]
+    // 特小 is exactly two thirds of 小, matching the mac menu.
+    let sizes = [("特小", 0.7 * 2.0 / 3.0), ("小", 0.7), ("中", 0.9), ("大", 1.1), ("特大", 1.35)]
         .iter()
         .map(|(text, value)| check(app, format!("scale:{value}"), text, s.scale == *value))
         .collect::<tauri::Result<Vec<_>>>()?;
@@ -741,6 +793,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     items.push(update_item(app)?);
     if !DEV && !hook_ready {
         items.push(note(app, "键盘监听未启动（详见 log.txt）")?);
+    }
+    if page_failed {
+        items.push(note(app, "猫的页面未加载（详见 log.txt）")?);
     }
     items.push(separator(app)?);
     items.push(action(app, "quit", "退出 KeyCat")?);
@@ -805,7 +860,9 @@ fn on_menu(app: &AppHandle, id: &str) {
                     let _ = if panel.is_visible().unwrap_or(false) { panel.hide() } else { panel.show() };
                 }
             }
-            "update:check" => check_for_updates(app),
+            "update:check" => {
+                tauri::async_runtime::spawn(check_for_updates(app.clone(), true));
+            }
             "update:install" => install_update(app),
             "quit" => app.exit(0),
             _ => {}
@@ -837,7 +894,15 @@ fn set_autostart(app: &AppHandle, mode: Mode) {
 fn sync_autostart(app: &AppHandle) {
     let current = host(app).autostart;
     let want = autostart_mode(app);
-    if DEV || current == Mode::Off || current == want {
+    if DEV || current == Mode::Off {
+        return;
+    }
+    // Moved or reinstalled elsewhere: point the task at this copy, which a normal start then
+    // hands over to without a UAC prompt (see prepare_launch).
+    if current == Mode::Task && want == Mode::Task && !autostart::task_runs_this() {
+        return set_autostart(app, Mode::Task);
+    }
+    if current == want {
         return;
     }
     if want == Mode::Task || elevate::is_elevated() {
@@ -867,7 +932,8 @@ fn toggle_admin(app: &AppHandle) {
 
 /// Before anything else starts: a restart waits for the copy that launched it to quit (or
 /// single-instance would close it), and with the administrator setting on, a normal start hands
-/// over to an elevated one. Returns false when this process should quit at once.
+/// over to an elevated one: through the login task when there is one, which asks nothing,
+/// otherwise behind the UAC prompt. Returns false when this process should quit at once.
 fn prepare_launch() -> bool {
     let args: Vec<String> = std::env::args().collect();
     if let Some(pid) = args.iter().position(|arg| arg == "--after").and_then(|i| args.get(i + 1)?.parse().ok()) {
@@ -880,7 +946,7 @@ fn prepare_launch() -> bool {
     let Some(dir) = std::env::var_os("APPDATA") else { return true };
     let store = Store::open(PathBuf::from(dir).join(IDENTIFIER).join("settings.json"));
     // Declined, KeyCat still runs, just without key presses from elevated windows.
-    store.get("runAsAdmin") != Some(&Value::Bool(true)) || elevate::relaunch("").is_err()
+    store.get("runAsAdmin") != Some(&Value::Bool(true)) || (!autostart::run_task() && elevate::relaunch("").is_err())
 }
 
 // MARK: Settings window
@@ -963,64 +1029,78 @@ fn set_update(app: &AppHandle, state: UpdateState) {
     }
 }
 
-fn check_for_updates(app: &AppHandle) {
+/// The check gives up after 10 s, so a network that cannot reach GitHub (common in mainland
+/// China) fails fast instead of hanging in 正在检查更新…. The download gets longer, a few MB on
+/// a slow line.
+const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+const UPDATE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// Checks for a new version and downloads it. `manual` is a click on 检查更新…: only then does a
+/// failure show in the menu. The timed checks fail quietly and are retried sooner (see
+/// start_update_checks). Returns false if the check or the download failed.
+async fn check_for_updates(app: AppHandle, manual: bool) -> bool {
     if DEV {
-        return;
+        return true;
     }
     {
-        let mut h = host(app);
+        let mut h = host(&app);
         if matches!(h.update, UpdateState::Checking | UpdateState::Downloading(..) | UpdateState::Ready(_)) {
-            return;
+            return true;
         }
         h.update = UpdateState::Checking;
     }
-    refresh_menu(app);
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let found = match app.updater() {
-            Ok(updater) => updater.check().await,
-            Err(error) => Err(error),
-        };
-        let update = match found {
-            Ok(Some(update)) => update,
-            Ok(None) => return set_update(&app, UpdateState::Current),
-            Err(error) => {
-                log(&format!("update check failed: {error}"));
-                return set_update(&app, UpdateState::Failed);
-            }
-        };
-        let version = update.version.clone();
-        log(&format!("update {version} available"));
-        set_update(&app, UpdateState::Downloading(version.clone(), 0));
-        let (progress_app, progress_version) = (app.clone(), version.clone());
-        let mut received = 0u64;
-        let downloaded = update
-            .download(
-                move |chunk, total| {
-                    received += chunk as u64;
-                    if let Some(total) = total.filter(|total| *total > 0) {
-                        let percent = (received * 100 / total).min(100) as u32;
-                        set_update(&progress_app, UpdateState::Downloading(progress_version.clone(), percent));
-                    }
-                },
-                || {},
-            )
-            .await;
-        match downloaded {
-            Ok(bytes) => {
-                log(&format!("update {version} downloaded"));
-                host(&app).downloaded = Some((update, bytes));
-                set_update(&app, UpdateState::Ready(version.clone()));
-                if let Some(tray) = app.tray_by_id(TRAY) {
-                    let _ = tray.set_tooltip(Some(format!("KeyCat：v{version} 已下载，可从菜单重启更新")));
-                }
-            }
-            Err(error) => {
-                log(&format!("update download failed: {error}"));
-                set_update(&app, UpdateState::Failed);
-            }
+    refresh_menu(&app);
+    let failed = if manual { UpdateState::Failed } else { UpdateState::Idle };
+    let found = match app.updater_builder().timeout(UPDATE_CHECK_TIMEOUT).build() {
+        Ok(updater) => updater.check().await,
+        Err(error) => Err(error),
+    };
+    let mut update = match found {
+        Ok(Some(update)) => update,
+        Ok(None) => {
+            set_update(&app, UpdateState::Current);
+            return true;
         }
-    });
+        Err(error) => {
+            log(&format!("update check failed: {error}"));
+            set_update(&app, failed);
+            return false;
+        }
+    };
+    update.timeout = Some(UPDATE_DOWNLOAD_TIMEOUT);
+    let version = update.version.clone();
+    log(&format!("update {version} available"));
+    set_update(&app, UpdateState::Downloading(version.clone(), 0));
+    let (progress_app, progress_version) = (app.clone(), version.clone());
+    let mut received = 0u64;
+    let downloaded = update
+        .download(
+            move |chunk, total| {
+                received += chunk as u64;
+                if let Some(total) = total.filter(|total| *total > 0) {
+                    let percent = (received * 100 / total).min(100) as u32;
+                    set_update(&progress_app, UpdateState::Downloading(progress_version.clone(), percent));
+                }
+            },
+            || {},
+        )
+        .await;
+    match downloaded {
+        Ok(bytes) => {
+            log(&format!("update {version} downloaded"));
+            host(&app).downloaded = Some((update, bytes));
+            set_update(&app, UpdateState::Ready(version.clone()));
+            if let Some(tray) = app.tray_by_id(TRAY) {
+                let _ = tray.set_tooltip(Some(format!("KeyCat：v{version} 已下载，可从菜单重启更新")));
+            }
+            true
+        }
+        Err(error) => {
+            log(&format!("update download failed: {error}"));
+            set_update(&app, failed);
+            false
+        }
+    }
 }
 
 /// Runs the downloaded installer, which closes this process and starts the new version.
@@ -1036,10 +1116,23 @@ fn install_update(app: &AppHandle) {
 fn start_update_checks(app: &AppHandle) {
     let app = app.clone();
     thread::spawn(move || {
+        const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
         thread::sleep(Duration::from_secs(15));
+        // After a failure the next try comes in 30 min, then 1 h, 2 h, 4 h, and from then on
+        // every 6 h as usual, so a short outage is caught up soon and a blocked network is not
+        // asked over and over.
+        let mut retry = Duration::from_secs(30 * 60);
         loop {
-            check_for_updates(&app);
-            thread::sleep(Duration::from_secs(6 * 60 * 60));
+            let wait = if tauri::async_runtime::block_on(check_for_updates(app.clone(), false)) {
+                retry = Duration::from_secs(30 * 60);
+                EVERY
+            } else {
+                let wait = retry;
+                retry = (retry * 2).min(EVERY);
+                log(&format!("next update check in {} min", wait.as_secs() / 60));
+                wait
+            };
+            thread::sleep(wait);
         }
     });
 }
@@ -1065,8 +1158,14 @@ fn setup(app: &AppHandle) -> tauri::Result<()> {
         autostart: if DEV { Mode::Off } else { autostart::current() },
         update: UpdateState::Idle,
         downloaded: None,
+        page_answered: false,
+        page_failed: false,
     }));
-    create_panel(app)?;
+    // Without its window KeyCat still starts, so the tray menu can say what went wrong.
+    if let Err(error) = create_panel(app) {
+        log(&format!("panel failed: {error}"));
+        host(app).page_failed = true;
+    }
     TrayIconBuilder::with_id(TRAY)
         .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
         .tooltip("KeyCat")
