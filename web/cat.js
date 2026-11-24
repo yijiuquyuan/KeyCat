@@ -447,42 +447,54 @@
   // Coats, drawn from real cats: each has its own nose, inner ear, muzzle and bib colours, and the
   // `eye` it most often has. `tabby` lists the stripe colour for coats that can be striped, and
   // `striped` ones wear the stripes unless the pattern is set to solid. `point` and `points` give
-  // the dark mask, ears, legs and tail of colourpoint breeds; `curl` the waves of a rex coat in the
-  // `wave` colour, and `ears` scales the ears. `shade` is the soft volume shading; black stays a
-  // flat silhouette like the reference.
+  // the dark mask, ears, legs and tail of colourpoint breeds, `pointsArm` how far they run down
+  // the forelegs; `tip` and `tipAmt` the dark-tipped guard hairs of a shaded coat; `curl` the waves
+  // of a rex coat in the `wave` colour; `ears` scales the ears; `round` marks the round-eyed
+  // cobby-headed breeds. `shade` is the soft volume shading; black stays a flat silhouette like the
+  // reference. `arm` is the edge the limbs are drawn with and `paw`/`toe` the paw and its pads:
+  // these follow the coat's own colour except where the breed really has white mitts or dark points.
   const COATS = {
-    black: { fur: '#151515', ink: '#151515', rim: '#f6f3e8', arm: '#8a8984', paw: '#f7f6f0', toe: '#b9b7ae', whisker: '#dedcd4', eye: 'gold' },
-    tuxedo: { fur: '#1a1a1a', ink: '#151515', lid: '#e4c25a', rim: '#f6f3e8', arm: '#8a8984', paw: '#f8f7f2', toe: '#bcbab2', whisker: '#e8e6de', eye: 'green',
+    black: { fur: '#151515', ink: '#151515', rim: '#f6f3e8', arm: '#3c3b38', paw: '#191919', toe: '#4a423c', whisker: '#dedcd4', eye: 'gold' },
+    // A tuxedo does have white mitts, but its forelegs are black, not grey.
+    tuxedo: { fur: '#1a1a1a', ink: '#151515', lid: '#e4c25a', rim: '#f6f3e8', arm: '#3c3b38', paw: '#f8f7f2', toe: '#bcbab2', whisker: '#e8e6de', eye: 'green',
       light: '#f8f7f2', muzzle: 1, tuxedo: 1, nose: '#e7a0a0', mouth: '#9a8f88', inner: '#3a2e2e', innerAmt: 1, shade: 0.25 },
-    orange: { fur: '#eda25a', ink: '#b8712f', lid: '#8a4a1f', rim: '#fff8ea', arm: '#b8712f', paw: '#fff6e8', toe: '#e0b991', whisker: '#fffaf0', eye: 'green',
+    orange: { fur: '#eda25a', ink: '#b8712f', lid: '#8a4a1f', rim: '#fff8ea', arm: '#b8712f', paw: '#f3bd82', toe: '#d9a06a', whisker: '#fffaf0', eye: 'green',
       light: '#fff1dc', muzzle: 1, bib: 1, nose: '#e58a78', mouth: '#a5643a', inner: '#f4b6a2', innerAmt: 1, shade: 0.55,
       tabby: '#c46a2b', striped: true },
-    grey: { fur: '#8995a4', ink: '#5f6a78', lid: '#3d4450', rim: '#f6f5f0', arm: '#5f6a78', paw: '#f2f1ec', toe: '#bfc3c8', whisker: '#f4f2ea', eye: 'amber',
+    grey: { fur: '#8995a4', ink: '#5f6a78', lid: '#3d4450', rim: '#f6f5f0', arm: '#5f6a78', paw: '#8f9caa', toe: '#bfc3c8', whisker: '#f4f2ea', eye: 'amber',
       light: '#b8c1cc', muzzle: 0.8, bib: 0.6, nose: '#6d6f7d', mouth: '#56606d', inner: '#c9aeb4', innerAmt: 1, shade: 0.55,
       tabby: '#5e6a79' },
     white: { fur: '#fbf9f3', ink: '#c2b8a8', lid: '#8a7f72', rim: '#8b8172', arm: '#c9c1b2', paw: '#fbf9f3', toe: '#e0c9c2', whisker: '#b6ada0', eye: 'blue',
       nose: '#f0a3a3', mouth: '#c99c94', inner: '#f6c3c3', innerAmt: 1, shade: 0.5 },
     calico: { fur: '#fbf8f1', ink: '#c2b8a8', lid: '#6e5a4e', rim: '#8b8172', arm: '#c9c1b2', paw: '#fbf8f1', toe: '#e0c9c2', whisker: '#b6ada0', eye: 'gold',
       patchA: '#e5964a', patchB: '#2b2522', calico: 1, nose: '#eea29a', mouth: '#b08a80', inner: '#f2bcb6', innerAmt: 1, shade: 0.5 },
-    // Seal point: cream body, dark brown mask, ears, legs, paws and tail.
+    // Seal point: cream body, dark brown mask, ears, legs, paws and tail — the points reach the paws.
     siamese: { fur: '#f0e4cf', ink: '#8b6f5c', rim: '#8b7a68', arm: '#6e5444', paw: '#5a4033', toe: '#3b2a21', whisker: '#f3ece0', eye: 'blue',
       point: '#4b3428', points: 1, nose: '#2f211b', mouth: '#24180f', inner: '#6d5244', innerAmt: 1, shade: 0.45 },
-    // Seal bicolour: softer points, white inverted V on the face, white chest and mitts.
-    ragdoll: { fur: '#f5eee3', ink: '#a8927f', rim: '#8b8172', arm: '#a8927f', paw: '#fdfbf7', toe: '#ddd2c6', whisker: '#cfc4b6', eye: 'blue',
-      point: '#6f5242', points: 1, light: '#fdfbf7', muzzle: 1, tuxedo: 1, bib: 1, nose: '#e39b98', mouth: '#a07e70', inner: '#9a7466', innerAmt: 1, shade: 0.5 },
+    // The photo cat: a near-white, very fluffy bicolor whose points are a soft warm greige rather
+    // than seal brown, with a white blaze, pink nose and deep sapphire eyes. Legs and mitts white.
+    ragdoll: { fur: '#f7f2ea', ink: '#a8927f', rim: '#8b8172', arm: '#9c8a7c', paw: '#fdfbf7', toe: '#eabcbc', whisker: '#e8e2d8', eye: 'sapphire',
+      point: '#8d7a6d', points: 1, pointsArm: 0.25, light: '#fffdf9', muzzle: 1, tuxedo: 1, bib: 1, nose: '#e39b98', mouth: '#a07e70',
+      inner: '#b09a90', innerAmt: 1, shade: 0.5 },
     // Devon rex: big low-set ears and a short wavy coat, here in lilac.
-    devon: { fur: '#b3a8ad', ink: '#7f7479', lid: '#5b5156', rim: '#fbf9f6', arm: '#7f7479', paw: '#efeaec', toe: '#c3b9be', whisker: '#fbf9f6', eye: 'gold',
+    devon: { fur: '#b3a8ad', ink: '#7f7479', lid: '#5b5156', rim: '#fbf9f6', arm: '#7f7479', paw: '#b3a8ad', toe: '#c3b9be', whisker: '#fbf9f6', eye: 'gold',
       light: '#d9d1d5', muzzle: 0.8, wave: '#9a8f95', curl: 1, ears: 1.45, nose: '#d79a9e', mouth: '#7f7479', inner: '#e8b9bf', innerAmt: 1, shade: 0.5 },
-    // American shorthair: silver with black tabby stripes.
-    silver: { fur: '#c7ccd1', ink: '#7d838a', lid: '#3f444a', rim: '#fbfbf8', arm: '#7d838a', paw: '#f1f2f2', toe: '#b6bcc2', whisker: '#fbfbf8', eye: 'green',
+    // American shorthair: silver with black tabby stripes and dark pads.
+    silver: { fur: '#c7ccd1', ink: '#7d838a', lid: '#3f444a', rim: '#fbfbf8', arm: '#7d838a', paw: '#c7ccd1', toe: '#3f4247', whisker: '#fbfbf8', eye: 'green',
       light: '#f1f2f2', muzzle: 1, bib: 0.8, nose: '#c98a8a', mouth: '#6c7279', inner: '#e5b8bb', innerAmt: 1, shade: 0.55,
       tabby: '#2e3136', striped: true },
     // Chinese li hua: brown mackerel tabby.
-    lihua: { fur: '#a98a62', ink: '#6e5640', lid: '#3d2f22', rim: '#fff8ec', arm: '#6e5640', paw: '#efe5d3', toe: '#c9b493', whisker: '#fff8ec', eye: 'green',
+    lihua: { fur: '#a98a62', ink: '#6e5640', lid: '#3d2f22', rim: '#fff8ec', arm: '#6e5640', paw: '#a98a62', toe: '#b08a6a', whisker: '#fff8ec', eye: 'green',
       light: '#eadfca', muzzle: 1, bib: 0.7, nose: '#b8735f', mouth: '#5e4836', inner: '#d9a894', innerAmt: 1, shade: 0.55,
       tabby: '#3d2f22', striped: true },
+    // Golden shaded British, NY11: apricot-gold undercoat, guard hairs tipped a warm dark tan over
+    // the mantle and down the tail, black liner, brick-red nose, black pads, green eyes — and the
+    // round eye and flat face of the cobby breed.
+    golden: { fur: '#d9ad6b', ink: '#8a6a3f', lid: '#2a2018', rim: '#fff2dd', arm: '#a97e45', paw: '#dcb069', toe: '#241a18',
+      whisker: '#f6f1e6', eye: 'green', light: '#f5e7cd', muzzle: 1, bib: 0.8, nose: '#d4796d', mouth: '#5e4a3a',
+      inner: '#e0b0a8', innerAmt: 1, shade: 0.55, tip: '#4a3a26', tipAmt: 0.8, round: true },
   };
-  const EYES = { gold: '#dcb64a', green: '#93c255', blue: '#6eb2e6', amber: '#e59a32', copper: '#d9792f' };
+  const EYES = { gold: '#dcb64a', green: '#93c255', blue: '#4a90cf', sapphire: '#3d6fa8', amber: '#e59a32', copper: '#d9792f' };
   // Catchlight dots per style: [x (outer side +), y, radius].
   const SHINES = {
     none: [],
@@ -491,8 +503,9 @@
   };
   const COLLARS = { red: '#d9483b', blue: '#4f8fd8', pink: '#ee8fb4', green: '#5fae6a' };
   // eye: 'auto' follows the coat; 'odd' is one blue and one gold eye.
+  // eyeShape: 'auto' follows the coat, and the cobby breeds (`round`) get a round eye.
   // style: '2d' is flat colour like a sticker; '3d' adds soft volume shading.
-  const look = { style: '2d', coat: 'black', pattern: 'auto', eye: 'auto', shine: 'classic', blush: false, whiskers: true, collar: 'none' };
+  const look = { style: '2d', coat: 'black', pattern: 'auto', eye: 'auto', eyeShape: 'auto', shine: 'classic', blush: false, whiskers: true, collar: 'none' };
   function setLook(o) {
     Object.assign(look, o);
     const c = COATS[look.coat] || COATS.black;
@@ -512,6 +525,9 @@
     rimMat.color.set(c.rim);
     armRimMat.color.set(c.arm);
     pawMat.color.set(c.paw);
+    // The paw's edge is drawn with the same limb edge as the arm, so a paw never reads as a
+    // different animal from the leg it sits on.
+    pawRimMat.color.set(c.arm);
     toeMat.color.set(c.toe);
     whiskerMat.color.set(c.whisker);
     noseMat.color.set(c.nose || c.fur);
@@ -521,6 +537,10 @@
     eyeMats[0].color.set(EYES[eye === 'odd' ? 'blue' : eye] || EYES.gold);
     eyeMats[1].color.set(EYES[eye === 'odd' ? 'gold' : eye] || EYES.gold);
     lidMat.color.set(c.lid || eyeMats[0].color);
+    // Cobby breeds read round-eyed. The aperture opens here; behavior.js trades the slit pupil for
+    // a round one, and `eyeShape` in the 外观 menu overrides what the coat says.
+    K.eyeRound = look.eyeShape === 'round' || (look.eyeShape !== 'almond' && !!c.round) ? 1 : 0;
+    for (const e of eyes) e.iris.scale.set(0.155, mix(0.14, 0.152, K.eyeRound), 1);
     for (const e of eyes) {
       const dots = SHINES[look.shine] || SHINES.classic;
       e.shine.children.forEach((d, i) => {

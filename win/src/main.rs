@@ -98,6 +98,8 @@ struct Settings {
     coat: String,
     pattern: String,
     eye: String,
+    /// "auto" follows the coat (the cobby breeds read round-eyed); "almond" forces the slit pupil.
+    eye_shape: String,
     shine: String,
     collar: String,
     blush: bool,
@@ -125,6 +127,7 @@ impl Host {
             style: text("style", "2d"),
             pattern: text(&format!("pattern.{coat}"), "auto"),
             eye: text("eyeColor", "auto"),
+            eye_shape: text("eyeShape", "auto"),
             shine: text("eyeShine", "classic"),
             collar: text("collar", "none"),
             blush: self.store.get("blush") == Some(&Value::Bool(true)),
@@ -200,6 +203,7 @@ fn push_options(app: &AppHandle) {
         "coat": s.coat,
         "pattern": s.pattern,
         "eye": s.eye,
+        "eyeShape": s.eye_shape,
         "shine": s.shine,
         "blush": s.blush,
         "whiskers": s.whiskers,
@@ -671,6 +675,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             ("德文卷毛猫", json!("devon")),
             ("美短银虎斑", json!("silver")),
             ("狸花猫", json!("lihua")),
+            ("金渐层", json!("golden")),
         ])?,
     )?);
     // Only coats whose stripes would show get the choice; black and white stay plain.
@@ -700,14 +705,21 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         ("粉色铃铛", json!("pink")),
         ("绿色铃铛", json!("green")),
     ])?;
+    let eye_shape = choice(app, "eyeShape", &json!(s.eye_shape), &[
+        ("跟随毛色", json!("auto")),
+        ("杏仁眼（竖瞳）", json!("almond")),
+        ("圆眼（圆瞳）", json!("round")),
+    ])?;
     items.push(submenu(app, "外观", vec![
         submenu(app, "眼睛颜色", eyes)?,
+        submenu(app, "眼睛款式", eye_shape)?,
         submenu(app, "眼睛高光", shine)?,
         submenu(app, "项圈", collar)?,
         toggle(app, "腮红", "blush", s.blush)?,
         toggle(app, "胡须", "whiskers", s.whiskers)?,
     ])?);
-    let sizes = [("特小", 0.5), ("小", 0.7), ("中", 0.9), ("大", 1.1), ("特大", 1.35)]
+    // 特小 is exactly two thirds of 小, matching the mac menu.
+    let sizes = [("特小", 0.7 * 2.0 / 3.0), ("小", 0.7), ("中", 0.9), ("大", 1.1), ("特大", 1.35)]
         .iter()
         .map(|(text, value)| check(app, format!("scale:{value}"), text, s.scale == *value))
         .collect::<tauri::Result<Vec<_>>>()?;

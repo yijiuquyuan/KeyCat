@@ -49,6 +49,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScri
         get { defaults.string(forKey: "eyeColor") ?? "auto" }
         set { defaults.set(newValue, forKey: "eyeColor") }
     }
+    /// "auto" follows the coat (the cobby breeds read round-eyed); "almond" forces the slit pupil.
+    var eyeShape: String {
+        get { defaults.string(forKey: "eyeShape") ?? "auto" }
+        set { defaults.set(newValue, forKey: "eyeShape") }
+    }
     var eyeShine: String {
         get { defaults.string(forKey: "eyeShine") ?? "classic" }
         set { defaults.set(newValue, forKey: "eyeShine") }
@@ -190,7 +195,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, WKScri
     }
 
     func pushOptions() {
-        let options: [String: Any] = ["style": style, "coat": coat, "pattern": pattern, "eye": eyeColor, "shine": eyeShine, "blush": blush,
+        let options: [String: Any] = ["style": style, "coat": coat, "pattern": pattern, "eye": eyeColor, "eyeShape": eyeShape, "shine": eyeShine, "blush": blush,
                                       "whiskers": whiskers, "collar": collar,
                                       "privacy": privacy, "sleepAfter": sleepAfter > 0 ? sleepAfter : 1e9,
                                       "tune": tune]
